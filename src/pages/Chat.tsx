@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChannelSidebar } from '@/components/chat/ChannelSidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
-import { Channel, Profile } from '@/types/chat';
+import { Channel } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 
@@ -12,7 +12,6 @@ export default function Chat() {
   const { user, loading: authLoading } = useAuth();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
-  const [onlineUsers, setOnlineUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,8 +23,6 @@ export default function Chat() {
   useEffect(() => {
     if (user) {
       fetchChannels();
-      fetchOnlineUsers();
-      subscribeToPresence();
     }
   }, [user]);
 
@@ -47,37 +44,6 @@ export default function Chat() {
     }
   };
 
-  const fetchOnlineUsers = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('status', 'online');
-
-    if (data) {
-      setOnlineUsers(data as Profile[]);
-    }
-  };
-
-  const subscribeToPresence = () => {
-    const subscription = supabase
-      .channel('presence-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles'
-        },
-        () => {
-          fetchOnlineUsers();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  };
 
   useEffect(() => {
     const subscription = supabase
@@ -119,7 +85,6 @@ export default function Chat() {
         channels={channels}
         activeChannel={activeChannel}
         onSelectChannel={setActiveChannel}
-        onlineUsers={onlineUsers}
       />
       <ChatArea channel={activeChannel} />
     </div>
