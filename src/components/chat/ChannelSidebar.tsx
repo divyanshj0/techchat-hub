@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Hash, Lock, Plus, Users, LogOut, Circle } from 'lucide-react';
+import { Hash, Lock, Plus, Users, LogOut, Circle, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Channel, Profile } from '@/types/chat';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { CreateChannelDialog } from './CreateChannelDialog';
+import { JoinChannelDialog } from './JoinChannelDialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -28,6 +29,7 @@ export function ChannelSidebar({
 }: ChannelSidebarProps) {
   const { profile, signOut } = useAuth();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showJoinChannel, setShowJoinChannel] = useState(false);
   const [channelMembers, setChannelMembers] = useState<ChannelMemberWithProfile[]>([]);
   
   const publicChannels = channels.filter(c => !c.is_private);
@@ -123,14 +125,26 @@ export function ChannelSidebar({
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Public Channels
             </span>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-5 w-5 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowCreateChannel(true)}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowJoinChannel(true)}
+                title="Join Channel"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowCreateChannel(true)}
+                title="Create Channel"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="space-y-1">
             {publicChannels.map((channel) => (
@@ -295,6 +309,11 @@ export function ChannelSidebar({
       <CreateChannelDialog 
         open={showCreateChannel} 
         onOpenChange={setShowCreateChannel} 
+      />
+
+      <JoinChannelDialog 
+        open={showJoinChannel} 
+        onOpenChange={setShowJoinChannel} 
       />
     </div>
   );
