@@ -168,7 +168,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_channel_role: {
+        Args: {
+          _channel_id: string
+          _roles: Database["public"]["Enums"]["channel_role"][]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_channel_member: {
+        Args: { _channel_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       channel_role: "admin" | "moderator" | "member"
