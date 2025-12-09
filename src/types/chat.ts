@@ -30,6 +30,8 @@ export interface Message {
   channel_id: string;
   user_id: string;
   content: string;
+  parent_id: string | null;
+  reply_count: number;
   created_at: string;
   updated_at: string;
   profile?: Profile;

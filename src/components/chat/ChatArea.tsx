@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Hash, Lock, Users, Settings } from 'lucide-react';
+import { Hash, Lock, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Channel, Message, Profile, ChannelMember } from '@/types/chat';
+import { Channel, Message, Profile } from '@/types/chat';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
+import { ThreadView } from './ThreadView';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { ChannelMembersDialog } from './ChannelMembersDialog';
+import { analyzeContent } from '@/lib/codeDetection';
 
 interface ChatAreaProps {
   channel: Channel | null;
@@ -23,6 +25,7 @@ export function ChatArea({ channel }: ChatAreaProps) {
   const [hasMore, setHasMore] = useState(true);
   const [showMembers, setShowMembers] = useState(false);
   const [memberCount, setMemberCount] = useState(0);
+  const [activeThread, setActiveThread] = useState<Message | null>(null);
 
   const fetchProfiles = async (userIds: string[]) => {
     const uniqueIds = [...new Set(userIds)].filter(id => !profiles[id]);
@@ -129,6 +132,9 @@ export function ChatArea({ channel }: ChatAreaProps) {
   const handleSendMessage = async (content: string) => {
     if (!channel || !user) return;
 
+    // Check if content should auto-thread
+    const contentAnalysis = analyzeContent(content);
+
     // Join channel if not a member (for public channels)
     if (!channel.is_private) {
       const { data: existingMember } = await supabase
@@ -147,11 +153,11 @@ export function ChatArea({ channel }: ChatAreaProps) {
       }
     }
 
-    const { error } = await supabase.from('messages').insert({
+    const { data: newMessage, error } = await supabase.from('messages').insert({
       channel_id: channel.id,
       user_id: user.id,
       content
-    });
+    }).select().single();
 
     if (error) {
       toast({
@@ -159,6 +165,12 @@ export function ChatArea({ channel }: ChatAreaProps) {
         description: error.message,
         variant: 'destructive'
       });
+      return;
+    }
+
+    // Auto-open thread for code/error messages
+    if (contentAnalysis.shouldThread && newMessage) {
+      setActiveThread(newMessage as Message);
     }
   };
 
@@ -167,6 +179,14 @@ export function ChatArea({ channel }: ChatAreaProps) {
       fetchMessages(messages.length);
     }
   };
+
+  const handleOpenThread = (message: Message) => {
+    setActiveThread(message);
+  };
+
+  const handleFetchProfiles = useCallback((userIds: string[]) => {
+    fetchProfiles(userIds);
+  }, []);
 
   if (!channel) {
     return (
@@ -181,57 +201,70 @@ export function ChatArea({ channel }: ChatAreaProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
-      {/* Channel Header */}
-      <div className="h-14 px-4 flex items-center justify-between border-b border-border glass-panel">
-        <div className="flex items-center gap-3">
-          {channel.is_private ? (
-            <Lock className="h-5 w-5 text-muted-foreground" />
-          ) : (
-            <Hash className="h-5 w-5 text-muted-foreground" />
-          )}
-          <div>
-            <h2 className="font-semibold">{channel.name}</h2>
-            {channel.description && (
-              <p className="text-xs text-muted-foreground truncate max-w-md">
-                {channel.description}
-              </p>
+    <div className="flex-1 flex bg-background">
+      <div className="flex-1 flex flex-col">
+        {/* Channel Header */}
+        <div className="h-14 px-4 flex items-center justify-between border-b border-border glass-panel">
+          <div className="flex items-center gap-3">
+            {channel.is_private ? (
+              <Lock className="h-5 w-5 text-muted-foreground" />
+            ) : (
+              <Hash className="h-5 w-5 text-muted-foreground" />
             )}
+            <div>
+              <h2 className="font-semibold">{channel.name}</h2>
+              {channel.description && (
+                <p className="text-xs text-muted-foreground truncate max-w-md">
+                  {channel.description}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setShowMembers(true)}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              {memberCount}
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => setShowMembers(true)}
-          >
-            <Users className="h-4 w-4 mr-2" />
-            {memberCount}
-          </Button>
-        </div>
+
+        {/* Messages */}
+        <MessageList 
+          messages={messages}
+          profiles={profiles}
+          loading={loading}
+          hasMore={hasMore}
+          onLoadMore={handleLoadMore}
+          onOpenThread={handleOpenThread}
+        />
+
+        {/* Message Input */}
+        <MessageInput 
+          onSend={handleSendMessage}
+          placeholder={`Message #${channel.name}`}
+        />
+
+        <ChannelMembersDialog 
+          open={showMembers}
+          onOpenChange={setShowMembers}
+          channel={channel}
+        />
       </div>
 
-      {/* Messages */}
-      <MessageList 
-        messages={messages}
-        profiles={profiles}
-        loading={loading}
-        hasMore={hasMore}
-        onLoadMore={handleLoadMore}
-      />
-
-      {/* Message Input */}
-      <MessageInput 
-        onSend={handleSendMessage}
-        placeholder={`Message #${channel.name}`}
-      />
-
-      <ChannelMembersDialog 
-        open={showMembers}
-        onOpenChange={setShowMembers}
-        channel={channel}
-      />
+      {/* Thread Panel */}
+      {activeThread && (
+        <ThreadView
+          parentMessage={activeThread}
+          profiles={profiles}
+          onClose={() => setActiveThread(null)}
+          onProfilesFetch={handleFetchProfiles}
+        />
+      )}
     </div>
   );
 }
