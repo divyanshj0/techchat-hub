@@ -4,7 +4,10 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MessageSquare } from 'lucide-react';
+import { MessageContent } from './MessageContent';
+import { Button } from '@/components/ui/button';
+import { analyzeContent } from '@/lib/codeDetection';
 
 interface MessageListProps {
   messages: Message[];
@@ -12,6 +15,7 @@ interface MessageListProps {
   loading: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
+  onOpenThread?: (message: Message) => void;
 }
 
 export function MessageList({ 
@@ -19,7 +23,8 @@ export function MessageList({
   profiles, 
   loading, 
   hasMore, 
-  onLoadMore 
+  onLoadMore,
+  onOpenThread
 }: MessageListProps) {
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -66,8 +71,9 @@ export function MessageList({
     if (isYesterday(date)) return 'Yesterday';
     return format(date, 'MMMM d, yyyy');
   };
-
-  const groupedMessages = groupMessagesByDate(messages);
+  // Filter out thread replies from main view
+  const mainMessages = messages.filter(m => !m.parent_id);
+  const groupedMessages = groupMessagesByDate(mainMessages);
 
   return (
     <div 
@@ -97,12 +103,14 @@ export function MessageList({
               const isOwn = message.user_id === user?.id;
               const showAvatar = idx === 0 || 
                 group.messages[idx - 1].user_id !== message.user_id;
+              const contentAnalysis = analyzeContent(message.content);
+              const hasThread = (message.reply_count || 0) > 0;
 
               return (
                 <div 
                   key={message.id} 
                   className={cn(
-                    "flex gap-3 animate-slide-up",
+                    "flex gap-3 animate-slide-up group",
                     !showAvatar && "pl-11"
                   )}
                 >
@@ -128,13 +136,43 @@ export function MessageList({
                         <span className="text-xs text-muted-foreground">
                           {formatMessageDate(message.created_at)}
                         </span>
+                        {contentAnalysis.shouldThread && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                            {contentAnalysis.isError ? 'Error' : 'Code'}
+                          </span>
+                        )}
                       </div>
                     )}
                     <div className={cn(
                       "text-sm text-foreground/90 break-words",
                       isOwn ? "message-bubble-own inline-block" : ""
                     )}>
-                      {message.content}
+                      <MessageContent content={message.content} />
+                    </div>
+                    
+                    {/* Thread indicator / reply button */}
+                    <div className="flex items-center gap-2 mt-1">
+                      {hasThread ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={() => onOpenThread?.(message)}
+                        >
+                          <MessageSquare className="h-3 w-3 mr-1" />
+                          {message.reply_count} repl{message.reply_count !== 1 ? 'ies' : 'y'}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => onOpenThread?.(message)}
+                        >
+                          <MessageSquare className="h-3 w-3 mr-1" />
+                          Reply
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
